@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Marketplace Saved Organizer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Marketplace Saved Organizer</h1>
+      <p class="subtle">Import your Facebook export zip or JSON files, filter active items, browse by list or map, copy titles, and jump to Marketplace or eBay sold search.</p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel controls-panel">
+      <div class="control-group">
+        <label for="fileInput">Import Facebook zip or JSON files</label>
+        <input id="fileInput" type="file" accept=".zip,.json,application/json,application/zip" multiple />
+        <div class="button-row">
+          <button id="loadSampleBtn" type="button">Load demo data</button>
+          <button id="clearDataBtn" type="button" class="secondary">Clear imported data</button>
+        </div>
+        <p class="subtle small">Facebook usually gives you a zip file. You can import that directly. Your items are cached locally on this device.</p>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Location</div>
+        <div class="button-row">
+          <button id="useLocationBtn" type="button">Use current location</button>
+          <button id="clearLocationBtn" type="button" class="secondary">Clear location</button>
+        </div>
+        <p id="locationStatus" class="subtle small">Location not set.</p>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Filters</div>
+        <input id="searchInput" type="text" placeholder="Search title, area, notes, url" />
+
+        <div class="grid-two">
+          <div>
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter">
+              <option value="active">Active only</option>
+              <option value="all">All statuses</option>
+              <option value="unavailable">Unavailable only</option>
+              <option value="sold">Sold only</option>
+              <option value="unknown">Unknown only</option>
+            </select>
+          </div>
+          <div>
+            <label for="sortMode">Sort</label>
+            <select id="sortMode">
+              <option value="distance">Nearest first</option>
+              <option value="saved_desc">Newest saved</option>
+              <option value="saved_asc">Oldest saved</option>
+              <option value="price_asc">Lowest price</option>
+              <option value="price_desc">Highest price</option>
+              <option value="title">Title A to Z</option>
+              <option value="area">Area A to Z</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-two">
+          <div>
+            <label for="minPrice">Min price</label>
+            <input id="minPrice" type="number" min="0" step="1" placeholder="0" />
+          </div>
+          <div>
+            <label for="maxPrice">Max price</label>
+            <input id="maxPrice" type="number" min="0" step="1" placeholder="9999" />
+          </div>
+        </div>
+
+        <div class="grid-two">
+          <div>
+            <label for="savedAfter">Saved after</label>
+            <input id="savedAfter" type="date" />
+          </div>
+          <div>
+            <label for="savedBefore">Saved before</label>
+            <input id="savedBefore" type="date" />
+          </div>
+        </div>
+
+        <div class="toggles">
+          <label><input id="shortlistOnly" type="checkbox" /> Shortlist only</label>
+          <label><input id="hidePassed" type="checkbox" checked /> Hide passed</label>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Status</div>
+        <div id="summary" class="summary-box">No items loaded.</div>
+      </div>
+    </section>
+
+    <section class="panel content-panel">
+      <div class="toolbar">
+        <div class="tabs" role="tablist">
+          <button id="listTabBtn" class="tab active" type="button" aria-selected="true">List</button>
+          <button id="mapTabBtn" class="tab" type="button" aria-selected="false">Map</button>
+        </div>
+        <div class="toolbar-actions">
+          <button id="exportCsvBtn" type="button" class="secondary">Export CSV</button>
+        </div>
+      </div>
+
+      <section id="listView" class="view active-view">
+        <div id="itemsList" class="items-list"></div>
+      </section>
+
+      <section id="mapView" class="view" aria-hidden="true">
+        <div id="mapSummary" class="subtle small map-summary">Map uses approximate area data. Pins are for browsing, not precise directions.</div>
+        <div id="map"></div>
+      </section>
+    </section>
+  </main>
+
+  <template id="itemCardTemplate">
+    <article class="item-card">
+      <div class="item-header">
+        <div class="item-title selectable"></div>
+        <div class="price-badge"></div>
+      </div>
+      <div class="meta-row">
+        <span class="meta area"></span>
+        <span class="meta distance"></span>
+        <span class="meta saved-date"></span>
+      </div>
+      <div class="meta-row">
+        <span class="status-badge"></span>
+        <span class="meta confidence"></span>
+      </div>
+      <textarea class="notes-input" rows="2" placeholder="Notes"></textarea>
+      <div class="button-row wrap">
+        <button class="copy-title-btn" type="button">Copy title</button>
+        <button class="copy-ebay-title-btn secondary" type="button">Copy cleaned title</button>
+        <button class="marketplace-link-btn" type="button">Open Marketplace</button>
+        <button class="ebay-link-btn secondary" type="button">eBay sold search</button>
+      </div>
+      <div class="button-row wrap">
+        <label class="pill-toggle"><input class="shortlist-toggle" type="checkbox" /> Shortlist</label>
+        <label class="pill-toggle"><input class="passed-toggle" type="checkbox" /> Pass</label>
+      </div>
+    </article>
+  </template>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
