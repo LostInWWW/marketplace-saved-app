@@ -11,7 +11,7 @@
   <header class="app-header">
     <div>
       <h1>Marketplace Saved Organizer</h1>
-      <p class="subtle">Import your Facebook export zip or JSON files, filter active items, browse by list or map, copy titles, and jump to Marketplace or eBay sold search.</p>
+      <p class="subtle">Import your Facebook export zip or JSON files, filter the weakest records, browse by list or map, copy titles, and jump to Marketplace or eBay sold search.</p>
     </div>
   </header>
 
@@ -20,11 +20,12 @@
       <div class="control-group">
         <label for="fileInput">Import Facebook zip or JSON files</label>
         <input id="fileInput" type="file" accept=".zip,.json,application/json,application/zip" multiple />
-        <div id="importStatus" class="subtle small">No file imported yet.</div>
+        <p id="importStatus" class="subtle small">No items loaded yet.</p>
         <div class="button-row">
           <button id="importBtn" type="button">Import selected file</button>
           <button id="loadSampleBtn" type="button">Load demo data</button>
           <button id="clearDataBtn" type="button" class="secondary">Clear imported data</button>
+          <button id="clearFlagsBtn" type="button" class="secondary">Clear notes and flags</button>
         </div>
         <p class="subtle small">Facebook usually gives you a zip file. You can import that directly. Your items are cached locally on this device.</p>
       </div>
@@ -46,8 +47,8 @@
           <div>
             <label for="statusFilter">Status</label>
             <select id="statusFilter">
-              <option value="active">Active only</option>
               <option value="all">All statuses</option>
+              <option value="active">Active only</option>
               <option value="unavailable">Unavailable only</option>
               <option value="sold">Sold only</option>
               <option value="unknown">Unknown only</option>
@@ -91,7 +92,10 @@
 
         <div class="toggles">
           <label><input id="shortlistOnly" type="checkbox" /> Shortlist only</label>
-          <label><input id="hidePassed" type="checkbox" checked /> Hide passed</label>
+          <label><input id="hidePassed" type="checkbox" /> Hide passed</label>
+          <label><input id="urlOnly" type="checkbox" /> Marketplace URL only</label>
+          <label><input id="titledOnly" type="checkbox" checked /> Titled items only</label>
+          <label><input id="hideUnknown" type="checkbox" /> Hide unknown</label>
         </div>
       </div>
 
@@ -137,6 +141,9 @@
       <div class="meta-row">
         <span class="status-badge"></span>
         <span class="meta confidence"></span>
+      </div>
+      <div class="meta-row">
+        <span class="meta reason"></span>
       </div>
       <textarea class="notes-input" rows="2" placeholder="Notes"></textarea>
       <div class="button-row wrap">

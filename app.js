@@ -1,7 +1,7 @@
 const STORAGE_KEYS = {
-  items: 'mpso_items_v2',
+  items: 'mpso_items_v3',
   location: 'mpso_location_v1',
-  prefs: 'mpso_prefs_v1'
+  prefs: 'mpso_prefs_v2'
 };
 
 const state = {
@@ -26,27 +26,31 @@ const DEMO_ITEMS = [
     savedAt: '2026-04-12T18:30:00Z',
     status: 'active',
     statusConfidence: 'demo',
+    statusReason: 'Demo record with Marketplace item URL.',
     sourceType: 'demo',
     notes: '',
     shortlist: true,
-    passed: false
+    passed: false,
+    distanceMiles: null
   },
   {
     id: 'demo-2',
     title: 'Vintage KitchenAid Mixer Works Great',
     cleanedTitle: 'vintage kitchenaid mixer works great',
     price: 120,
-    url: 'https://www.facebook.com/marketplace/item/2345678901/',
+    url: '',
     areaText: 'Portland, OR',
     latitude: 45.5152,
     longitude: -122.6784,
     savedAt: '2026-04-10T21:15:00Z',
     status: 'unknown',
     statusConfidence: 'demo',
+    statusReason: 'Demo record without a live Marketplace URL.',
     sourceType: 'demo',
     notes: '',
     shortlist: false,
-    passed: false
+    passed: false,
+    distanceMiles: null
   }
 ];
 
@@ -56,6 +60,7 @@ const els = {
   importStatus: document.getElementById('importStatus'),
   loadSampleBtn: document.getElementById('loadSampleBtn'),
   clearDataBtn: document.getElementById('clearDataBtn'),
+  clearFlagsBtn: document.getElementById('clearFlagsBtn'),
   useLocationBtn: document.getElementById('useLocationBtn'),
   clearLocationBtn: document.getElementById('clearLocationBtn'),
   locationStatus: document.getElementById('locationStatus'),
@@ -68,6 +73,12 @@ const els = {
   savedBefore: document.getElementById('savedBefore'),
   shortlistOnly: document.getElementById('shortlistOnly'),
   hidePassed: document.getElementById('hidePassed'),
+  titledOnly: document.getElementById('titledOnly'),
+  urlOnly: document.getElementById('urlOnly'),
+  hideUnknown: document.getElementById('hideUnknown'),
+  urlOnly: document.getElementById('urlOnly'),
+  titledOnly: document.getElementById('titledOnly'),
+  hideUnknown: document.getElementById('hideUnknown'),
   summary: document.getElementById('summary'),
   listTabBtn: document.getElementById('listTabBtn'),
   mapTabBtn: document.getElementById('mapTabBtn'),
@@ -88,10 +99,11 @@ function init() {
 }
 
 function bindEvents() {
-  els.fileInput.addEventListener('change', onFilePicked);
-  els.importBtn.addEventListener('click', onFilesSelected);
+  els.fileInput.addEventListener('change', onFilesSelected);
+  els.importBtn.addEventListener('click', importSelectedFiles);
   els.loadSampleBtn.addEventListener('click', loadDemoData);
   els.clearDataBtn.addEventListener('click', clearImportedData);
+  els.clearFlagsBtn.addEventListener('click', clearNotesAndFlags);
   els.useLocationBtn.addEventListener('click', useCurrentLocation);
   els.clearLocationBtn.addEventListener('click', clearLocation);
   els.exportCsvBtn.addEventListener('click', exportFilteredCsv);
@@ -107,8 +119,14 @@ function bindEvents() {
     els.savedAfter,
     els.savedBefore,
     els.shortlistOnly,
-    els.hidePassed
-  ].forEach(el => el.addEventListener('input', onFilterChanged));
+    els.hidePassed,
+    els.urlOnly,
+    els.titledOnly,
+    els.hideUnknown
+  ].forEach(el => {
+    el.addEventListener('input', onFilterChanged);
+    el.addEventListener('change', onFilterChanged);
+  });
 }
 
 function restoreState() {
@@ -127,18 +145,25 @@ function restoreState() {
   try {
     const prefs = JSON.parse(localStorage.getItem(STORAGE_KEYS.prefs) || '{}');
     if (prefs.searchInput) els.searchInput.value = prefs.searchInput;
-    if (prefs.statusFilter) els.statusFilter.value = prefs.statusFilter;
+    els.statusFilter.value = prefs.statusFilter || 'all';
     if (prefs.sortMode) els.sortMode.value = prefs.sortMode;
     if (prefs.minPrice) els.minPrice.value = prefs.minPrice;
     if (prefs.maxPrice) els.maxPrice.value = prefs.maxPrice;
     if (prefs.savedAfter) els.savedAfter.value = prefs.savedAfter;
     if (prefs.savedBefore) els.savedBefore.value = prefs.savedBefore;
     els.shortlistOnly.checked = Boolean(prefs.shortlistOnly);
-    els.hidePassed.checked = prefs.hidePassed !== false;
-  } catch {}
+    els.hidePassed.checked = Boolean(prefs.hidePassed);
+    els.urlOnly.checked = Boolean(prefs.urlOnly);
+    els.titledOnly.checked = prefs.titledOnly !== false;
+    els.hideUnknown.checked = Boolean(prefs.hideUnknown);
+  } catch {
+    els.statusFilter.value = 'all';
+    els.titledOnly.checked = true;
+  }
 
   updateLocationStatus();
   recomputeDistances();
+  setImportStatus(state.items.length ? `Loaded ${state.items.length} locally cached records.` : 'No items loaded yet.');
 }
 
 function saveItems() {
@@ -159,27 +184,39 @@ function savePrefs() {
     savedAfter: els.savedAfter.value,
     savedBefore: els.savedBefore.value,
     shortlistOnly: els.shortlistOnly.checked,
-    hidePassed: els.hidePassed.checked
+    hidePassed: els.hidePassed.checked,
+    urlOnly: els.urlOnly.checked,
+    titledOnly: els.titledOnly.checked,
+    hideUnknown: els.hideUnknown.checked
   };
   localStorage.setItem(STORAGE_KEYS.prefs, JSON.stringify(prefs));
 }
 
-function setImportStatus(msg) { if (els.importStatus) els.importStatus.textContent = msg; }
-
-function onFilePicked() {
-  const files = Array.from(els.fileInput.files || []);
-  if (!files.length) { setImportStatus('No file selected.'); return; }
-  const names = files.map(f => `${f.name} (${Math.round((f.size || 0)/1024)} KB)`).join(', ');
-  setImportStatus(`Selected: ${names}. Tap "Import selected file".`);
+function setImportStatus(message, isError = false) {
+  if (!els.importStatus) return;
+  els.importStatus.textContent = message;
+  els.importStatus.classList.toggle('error', Boolean(isError));
 }
 
-async function onFilesSelected(event) {
+async function onFilesSelected() {
   const files = Array.from(els.fileInput.files || []);
-  if (!files.length) { setImportStatus('Choose a zip or JSON file first.'); return; }
-  setImportStatus('Importing... this can take a little while on iPhone.');
-  els.importBtn.disabled = true;
+  if (!files.length) {
+    setImportStatus('No file selected.');
+    return;
+  }
+  const names = files.map(f => f.name).join(', ');
+  setImportStatus(`Selected ${files.length} file${files.length === 1 ? '' : 's'}: ${names}. Tap Import selected file.`);
+}
 
-  try {
+async function importSelectedFiles() {
+  const files = Array.from(els.fileInput.files || []);
+  if (!files.length) {
+    setImportStatus('Choose a zip or JSON file first.', true);
+    return;
+  }
+
+  setImportStatus('Importing selected file. This may take a bit on iPhone...');
+
   const rawItems = [];
   const stats = {
     collections: 0,
@@ -211,39 +248,32 @@ async function onFilesSelected(event) {
   }
 
   if (!rawItems.length) {
-    setImportStatus('No usable listing records were found. The export may not contain the expected Marketplace JSON files, or Safari may have failed to read them.');
-    els.fileInput.value = '';
-    els.importBtn.disabled = false;
+    setImportStatus('No usable listing records were found in the selected file.', true);
     return;
   }
 
   state.items = dedupeAndMerge(rawItems, state.items);
   recomputeDistances();
+
   try {
     saveItems();
   } catch (error) {
-    console.error('Could not cache items locally', error);
-    setImportStatus('Imported into this tab, but could not save locally on the phone. This is usually a Safari storage limit.');
+    console.error(error);
+    setImportStatus('Import worked, but Safari could not save all records locally. Try clearing imported data first or use fewer files.', true);
   }
+
   applyFiltersAndRender();
   els.fileInput.value = '';
 
-  const msg = [
+  setImportStatus([
     `Imported ${rawItems.length} records.`,
     stats.zipFiles ? `Zip files: ${stats.zipFiles}` : null,
     stats.zipJsonFiles ? `Zip JSON files read: ${stats.zipJsonFiles}` : null,
     stats.collections ? `Collections: ${stats.collections}` : null,
     stats.listingHistory ? `Listing history: ${stats.listingHistory}` : null,
-    stats.genericSavedLogs ? `Skipped generic saved logs: ${stats.genericSavedLogs}` : null,
+    stats.genericSavedLogs ? `generic saved logs skipped: ${stats.genericSavedLogs}` : null,
     stats.failedFiles ? `Files skipped: ${stats.failedFiles}` : null
-  ].filter(Boolean).join(' ');
-  setImportStatus(msg);
-  } catch (error) {
-    console.error('Import failed', error);
-    setImportStatus(`Import failed: ${error.message || error}`);
-  } finally {
-    els.importBtn.disabled = false;
-  }
+  ].filter(Boolean).join(' '));
 }
 
 async function parseZipFile(file, stats) {
@@ -282,7 +312,6 @@ function prioritizeZipEntry(name) {
   if (lower.endsWith('your_saved_items.json')) return 2;
   return 9;
 }
-
 
 function shouldParseZipEntry(name) {
   const lower = String(name || '').toLowerCase();
@@ -354,6 +383,8 @@ function normalizeSavedLogRow(row) {
     savedAt: normalizeDate(row.timestamp),
     status: statusBundle.status,
     statusConfidence: statusBundle.confidence,
+    statusReason: statusBundle.reason || '',
+    statusReason: statusBundle.reason,
     sourceType: 'saved_log',
     notes: '',
     shortlist: false,
@@ -391,7 +422,7 @@ function normalizeCollectionEntry(entry, collectionTitle, collectionUpdated) {
   const areaText = inferAreaFromText(`${description} ${collectionTitle}`);
   const statusBundle = inferStatus({ description, title, url }, title, url);
 
-  const hasUsefulListingFields = Boolean(title || price != null);
+  const hasUsefulListingFields = Boolean(title || price != null || url);
   if (!hasUsefulListingFields) return null;
 
   const guessed = guessLatLon(areaText);
@@ -408,6 +439,8 @@ function normalizeCollectionEntry(entry, collectionTitle, collectionUpdated) {
     savedAt: normalizeDate(collectionUpdated),
     status: statusBundle.status,
     statusConfidence: statusBundle.confidence,
+    statusReason: statusBundle.reason || '',
+    statusReason: statusBundle.reason,
     sourceType: 'collection',
     notes: '',
     shortlist: false,
@@ -443,8 +476,10 @@ function parseListingHistoryJson(json) {
       latitude: guessed.latitude,
       longitude: guessed.longitude,
       savedAt: normalizeDate(viewedAt),
-      status: url ? statusBundle.status : 'unknown',
-      statusConfidence: url ? statusBundle.confidence : 'viewed_only',
+      status: statusBundle.status,
+      statusConfidence: statusBundle.confidence,
+    statusReason: statusBundle.reason || '',
+      statusReason: statusBundle.reason,
       sourceType: 'listing_history',
       notes: '',
       shortlist: false,
@@ -494,6 +529,8 @@ function normalizeGenericRecord(rec) {
     savedAt: normalizeDate(savedRaw),
     status: statusBundle.status,
     statusConfidence: statusBundle.confidence,
+    statusReason: statusBundle.reason || '',
+    statusReason: statusBundle.reason,
     sourceType: 'generic',
     notes: '',
     shortlist: false,
@@ -564,7 +601,7 @@ function cleanTitleForSearch(title) {
   return decodeFbText(String(title || ''))
     .toLowerCase()
     .replace(/[\[\]{}()]/g, ' ')
-    .replace(/\b(pickup|local|obo|firm|fcfs|holds|hold|pending|porch|delivery|cash only)\b/g, ' ')
+    .replace(/(pickup|local|obo|firm|fcfs|holds|hold|pending|porch|delivery|cash only)/g, ' ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -572,15 +609,22 @@ function cleanTitleForSearch(title) {
 
 function inferStatus(rec, title, url) {
   const haystack = decodeFbText(JSON.stringify(rec || {})).toLowerCase();
-  if (/\bsold\b/.test(haystack)) return { status: 'sold', confidence: 'text' };
+  const titleText = String(title || '').toLowerCase();
+  const urlText = String(url || '');
+
+  if (/sold/.test(haystack) || /sold/.test(titleText)) {
+    return { status: 'sold', confidence: /sold/.test(titleText) ? 'title' : 'text', reason: 'Found sold wording in the exported record.' };
+  }
   if (/unavailable|no longer available|removed|not available|expired|deleted/.test(haystack)) {
-    return { status: 'unavailable', confidence: 'text' };
+    return { status: 'unavailable', confidence: 'text', reason: 'Found unavailable or removed wording in the exported record.' };
   }
-  if (title && /sold|pending/.test(String(title).toLowerCase())) return { status: 'sold', confidence: 'title' };
-  if (url && /facebook\.com\/marketplace\/item/.test(String(url))) {
-    return { status: 'active', confidence: 'url' };
+  if (url && /facebook\.com\/marketplace\/item\//.test(urlText)) {
+    return { status: 'active', confidence: 'url', reason: 'Found a direct Marketplace item URL in the export.' };
   }
-  return { status: 'unknown', confidence: 'heuristic' };
+  if (title) {
+    return { status: 'unknown', confidence: 'title_only', reason: 'The export has a title but no direct Marketplace item URL.' };
+  }
+  return { status: 'unknown', confidence: 'heuristic', reason: 'The export does not include enough information to classify this item confidently.' };
 }
 
 function extractMarketplaceUrl(text) {
@@ -596,15 +640,15 @@ function extractPrice(text) {
 function inferAreaFromText(text) {
   const source = decodeFbText(String(text || ''));
   const patterns = [
-    /\b(Beaverton,?\s*OR)\b/i,
-    /\b(Tigard,?\s*OR)\b/i,
-    /\b(Portland,?\s*OR)\b/i,
-    /\b(Hillsboro,?\s*OR)\b/i,
-    /\b(Vancouver,?\s*WA)\b/i,
-    /\b(Gresham,?\s*OR)\b/i,
-    /\b(Lake Oswego,?\s*OR)\b/i,
-    /\b(Salem,?\s*OR)\b/i,
-    /\b(Oregon City,?\s*OR)\b/i
+    /(Beaverton,?\s*OR)/i,
+    /(Tigard,?\s*OR)/i,
+    /(Portland,?\s*OR)/i,
+    /(Hillsboro,?\s*OR)/i,
+    /(Vancouver,?\s*WA)/i,
+    /(Gresham,?\s*OR)/i,
+    /(Lake Oswego,?\s*OR)/i,
+    /(Salem,?\s*OR)/i,
+    /(Oregon City,?\s*OR)/i
   ];
   for (const re of patterns) {
     const m = source.match(re);
@@ -648,6 +692,7 @@ function loadDemoData() {
   state.items = dedupeAndMerge(DEMO_ITEMS, state.items);
   recomputeDistances();
   saveItems();
+  setImportStatus(`Loaded ${DEMO_ITEMS.length} demo items.`);
   applyFiltersAndRender();
 }
 
@@ -655,8 +700,8 @@ function clearImportedData() {
   if (!confirm('Clear all locally stored items and notes on this device?')) return;
   state.items = [];
   saveItems();
+  setImportStatus('Cleared imported data on this device.');
   applyFiltersAndRender();
-  setImportStatus('Imported data cleared from this device.');
 }
 
 function useCurrentLocation() {
@@ -733,12 +778,15 @@ function applyFiltersAndRender() {
     if (els.statusFilter.value !== 'all' && item.status !== els.statusFilter.value) return false;
     if (els.shortlistOnly.checked && !item.shortlist) return false;
     if (els.hidePassed.checked && item.passed) return false;
+    if (els.urlOnly.checked && !item.url) return false;
+    if (els.titledOnly.checked && !hasMeaningfulTitle(item)) return false;
+    if (els.hideUnknown.checked && item.status === 'unknown') return false;
     if (minPrice != null && (item.price == null || item.price < minPrice)) return false;
     if (maxPrice != null && (item.price == null || item.price > maxPrice)) return false;
     if (savedAfter != null && (!item.savedAt || new Date(item.savedAt).getTime() < savedAfter)) return false;
     if (savedBefore != null && (!item.savedAt || new Date(item.savedAt).getTime() > savedBefore)) return false;
     if (query) {
-      const haystack = `${item.title} ${item.cleanedTitle} ${item.areaText} ${item.notes} ${item.url} ${item.sourceType}`.toLowerCase();
+      const haystack = `${item.title} ${item.cleanedTitle} ${item.areaText} ${item.notes} ${item.url} ${item.sourceType} ${item.statusReason || ''}`.toLowerCase();
       if (!haystack.includes(query)) return false;
     }
     return true;
@@ -749,6 +797,11 @@ function applyFiltersAndRender() {
   renderSummary(items);
   renderList(items);
   renderMap(items);
+}
+
+function hasMeaningfulTitle(item) {
+  const title = String(item.title || '').trim().toLowerCase();
+  return Boolean(title) && title !== '(untitled saved item)' && title !== '(untitled listing)';
 }
 
 function sortItems(items, mode) {
@@ -793,13 +846,16 @@ function compareDate(a, b) {
 }
 
 function renderSummary(items) {
-  const counts = items.reduce((acc, item) => {
+  const counts = state.items.reduce((acc, item) => {
     acc[item.status] = (acc[item.status] || 0) + 1;
     return acc;
   }, {});
   const withDistance = items.filter(i => i.distanceMiles != null).length;
   const fromCollections = items.filter(i => i.sourceType === 'collection').length;
   const fromHistory = items.filter(i => i.sourceType === 'listing_history').length;
+  const titled = items.filter(hasMeaningfulTitle).length;
+  const withUrl = items.filter(i => i.url).length;
+  const unknownNoUrl = items.filter(i => i.status === 'unknown' && !i.url).length;
   const text = [
     `${items.length} shown of ${state.items.length} total`,
     `Active ${counts.active || 0}`,
@@ -808,7 +864,10 @@ function renderSummary(items) {
     `Unknown ${counts.unknown || 0}`,
     `Distance ready ${withDistance}`,
     `Collections ${fromCollections}`,
-    `History ${fromHistory}`
+    `History ${fromHistory}`,
+    `Titled ${titled}`,
+    `With URL ${withUrl}`,
+    `Unknown without URL ${unknownNoUrl}`
   ].join(' • ');
   els.summary.textContent = text;
 }
@@ -829,6 +888,8 @@ function renderList(items) {
     const savedDateEl = node.querySelector('.saved-date');
     const statusEl = node.querySelector('.status-badge');
     const confidenceEl = node.querySelector('.confidence');
+    const sourceTypeEl = node.querySelector('.source-type');
+    const reasonEl = node.querySelector('.reason');
     const notesInput = node.querySelector('.notes-input');
     const copyTitleBtn = node.querySelector('.copy-title-btn');
     const copyEbayTitleBtn = node.querySelector('.copy-ebay-title-btn');
@@ -845,6 +906,8 @@ function renderList(items) {
     statusEl.textContent = item.status;
     statusEl.classList.add(item.status);
     confidenceEl.textContent = `Status source: ${item.statusConfidence}`;
+    sourceTypeEl.textContent = `Record source: ${item.sourceType}`;
+    reasonEl.textContent = item.statusReason ? `Why: ${item.statusReason}` : 'Why: no additional reason recorded';
     notesInput.value = item.notes || '';
     shortlistToggle.checked = Boolean(item.shortlist);
     passedToggle.checked = Boolean(item.passed);
@@ -915,7 +978,7 @@ function openEbaySoldSearch(item) {
 
 function exportFilteredCsv() {
   const rows = [
-    ['title', 'cleaned_title', 'price', 'area', 'distance_miles', 'saved_at', 'status', 'status_confidence', 'source_type', 'shortlist', 'passed', 'notes', 'url']
+    ['title', 'cleaned_title', 'price', 'area', 'distance_miles', 'saved_at', 'status', 'status_confidence', 'status_reason', 'source_type', 'shortlist', 'passed', 'notes', 'url']
   ];
 
   state.filteredItems.forEach(item => {
@@ -928,6 +991,7 @@ function exportFilteredCsv() {
       item.savedAt || '',
       item.status || '',
       item.statusConfidence || '',
+      item.statusReason || '',
       item.sourceType || '',
       item.shortlist ? 'yes' : 'no',
       item.passed ? 'yes' : 'no',
@@ -936,7 +1000,7 @@ function exportFilteredCsv() {
     ]);
   });
 
-  const csv = rows.map(row => row.map(csvCell).join(',')).join('\n');
+  TEMP
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1017,7 +1081,7 @@ function buildPopupHtml(item) {
   `;
 }
 
-function attachPopupHandlers(item) {
+function attachPopupHandlers() {
   const popupEl = document.querySelector('.leaflet-popup-content');
   if (!popupEl) return;
   popupEl.querySelectorAll('[data-popup-copy]').forEach(btn => {
