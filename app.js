@@ -227,7 +227,7 @@ async function parseZipFile(file, stats) {
   stats.zipFiles += 1;
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
   const entries = Object.values(zip.files)
-    .filter(entry => !entry.dir && entry.name.toLowerCase().endsWith('.json'))
+    .filter(entry => !entry.dir && shouldParseZipEntry(entry.name))
     .sort((a, b) => prioritizeZipEntry(a.name) - prioritizeZipEntry(b.name) || a.name.localeCompare(b.name));
 
   const items = [];
@@ -254,6 +254,14 @@ function prioritizeZipEntry(name) {
   if (lower.endsWith('your_marketplace_listing_history.json')) return 1;
   if (lower.endsWith('your_saved_items.json')) return 2;
   return 9;
+}
+
+
+function shouldParseZipEntry(name) {
+  const lower = String(name || '').toLowerCase();
+  return lower.endsWith('collections.json') ||
+    lower.endsWith('your_marketplace_listing_history.json') ||
+    lower.endsWith('your_saved_items.json');
 }
 
 function parseFileByName(fileName, json, stats) {
@@ -336,7 +344,7 @@ function parseCollectionsJson(json) {
     const collectionUpdated = getLabelTimestamp(collection.label_values, 'Last updated time');
 
     for (const block of collection.label_values || []) {
-      if (!Array.isArray(block.dict)) continue;
+      if (block?.title !== 'Saves' || !Array.isArray(block.dict)) continue;
       for (const entry of block.dict) {
         const item = normalizeCollectionEntry(entry, collectionTitle, collectionUpdated);
         if (item) items.push(item);
@@ -356,7 +364,7 @@ function normalizeCollectionEntry(entry, collectionTitle, collectionUpdated) {
   const areaText = inferAreaFromText(`${description} ${collectionTitle}`);
   const statusBundle = inferStatus({ description, title, url }, title, url);
 
-  const hasUsefulListingFields = Boolean(title || price != null || url);
+  const hasUsefulListingFields = Boolean(title || price != null);
   if (!hasUsefulListingFields) return null;
 
   const guessed = guessLatLon(areaText);
@@ -542,7 +550,7 @@ function inferStatus(rec, title, url) {
     return { status: 'unavailable', confidence: 'text' };
   }
   if (title && /sold|pending/.test(String(title).toLowerCase())) return { status: 'sold', confidence: 'title' };
-  if (url && /facebook\.com\/(marketplace\/item|groups\/.*\/permalink)/.test(String(url))) {
+  if (url && /facebook\.com\/marketplace\/item/.test(String(url))) {
     return { status: 'active', confidence: 'url' };
   }
   return { status: 'unknown', confidence: 'heuristic' };
