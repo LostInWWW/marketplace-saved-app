@@ -52,6 +52,8 @@ const DEMO_ITEMS = [
 
 const els = {
   fileInput: document.getElementById('fileInput'),
+  importBtn: document.getElementById('importBtn'),
+  importStatus: document.getElementById('importStatus'),
   loadSampleBtn: document.getElementById('loadSampleBtn'),
   clearDataBtn: document.getElementById('clearDataBtn'),
   useLocationBtn: document.getElementById('useLocationBtn'),
@@ -86,7 +88,8 @@ function init() {
 }
 
 function bindEvents() {
-  els.fileInput.addEventListener('change', onFilesSelected);
+  els.fileInput.addEventListener('change', onFilePicked);
+  els.importBtn.addEventListener('click', onFilesSelected);
   els.loadSampleBtn.addEventListener('click', loadDemoData);
   els.clearDataBtn.addEventListener('click', clearImportedData);
   els.useLocationBtn.addEventListener('click', useCurrentLocation);
@@ -161,10 +164,22 @@ function savePrefs() {
   localStorage.setItem(STORAGE_KEYS.prefs, JSON.stringify(prefs));
 }
 
-async function onFilesSelected(event) {
-  const files = Array.from(event.target.files || []);
-  if (!files.length) return;
+function setImportStatus(msg) { if (els.importStatus) els.importStatus.textContent = msg; }
 
+function onFilePicked() {
+  const files = Array.from(els.fileInput.files || []);
+  if (!files.length) { setImportStatus('No file selected.'); return; }
+  const names = files.map(f => `${f.name} (${Math.round((f.size || 0)/1024)} KB)`).join(', ');
+  setImportStatus(`Selected: ${names}. Tap "Import selected file".`);
+}
+
+async function onFilesSelected(event) {
+  const files = Array.from(els.fileInput.files || []);
+  if (!files.length) { setImportStatus('Choose a zip or JSON file first.'); return; }
+  setImportStatus('Importing... this can take a little while on iPhone.');
+  els.importBtn.disabled = true;
+
+  try {
   const rawItems = [];
   const stats = {
     collections: 0,
@@ -196,14 +211,20 @@ async function onFilesSelected(event) {
   }
 
   if (!rawItems.length) {
-    alert('No usable listing records were found. For this Facebook export, the most helpful data usually lives in collections.json and your_marketplace_listing_history.json inside the zip.');
+    setImportStatus('No usable listing records were found. The export may not contain the expected Marketplace JSON files, or Safari may have failed to read them.');
     els.fileInput.value = '';
+    els.importBtn.disabled = false;
     return;
   }
 
   state.items = dedupeAndMerge(rawItems, state.items);
   recomputeDistances();
-  saveItems();
+  try {
+    saveItems();
+  } catch (error) {
+    console.error('Could not cache items locally', error);
+    setImportStatus('Imported into this tab, but could not save locally on the phone. This is usually a Safari storage limit.');
+  }
   applyFiltersAndRender();
   els.fileInput.value = '';
 
@@ -216,7 +237,13 @@ async function onFilesSelected(event) {
     stats.genericSavedLogs ? `Skipped generic saved logs: ${stats.genericSavedLogs}` : null,
     stats.failedFiles ? `Files skipped: ${stats.failedFiles}` : null
   ].filter(Boolean).join(' ');
-  alert(msg);
+  setImportStatus(msg);
+  } catch (error) {
+    console.error('Import failed', error);
+    setImportStatus(`Import failed: ${error.message || error}`);
+  } finally {
+    els.importBtn.disabled = false;
+  }
 }
 
 async function parseZipFile(file, stats) {
@@ -629,6 +656,7 @@ function clearImportedData() {
   state.items = [];
   saveItems();
   applyFiltersAndRender();
+  setImportStatus('Imported data cleared from this device.');
 }
 
 function useCurrentLocation() {

@@ -20,7 +20,9 @@
       <div class="control-group">
         <label for="fileInput">Import Facebook zip or JSON files</label>
         <input id="fileInput" type="file" accept=".zip,.json,application/json,application/zip" multiple />
+        <div id="importStatus" class="subtle small">No file imported yet.</div>
         <div class="button-row">
+          <button id="importBtn" type="button">Import selected file</button>
           <button id="loadSampleBtn" type="button">Load demo data</button>
           <button id="clearDataBtn" type="button" class="secondary">Clear imported data</button>
         </div>
