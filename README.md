@@ -30,3 +30,8 @@ Replace these files in your repo root:
 - README.md
 
 Then wait for GitHub Pages to refresh and reload the site.
+
+
+## v7
+- Added Hide automobiles filter
+- Added Hide housing filter

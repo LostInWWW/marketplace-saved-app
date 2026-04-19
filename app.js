@@ -1,7 +1,7 @@
 const STORAGE_KEYS = {
   items: 'mpso_items_v4',
   location: 'mpso_location_v1',
-  prefs: 'mpso_prefs_v3'
+  prefs: 'mpso_prefs_v4'
 };
 
 const state = {
@@ -75,6 +75,8 @@ const els = {
   urlOnly: document.getElementById('urlOnly'),
   titledOnly: document.getElementById('titledOnly'),
   hideUnknown: document.getElementById('hideUnknown'),
+  hideAutos: document.getElementById('hideAutos'),
+  hideHousing: document.getElementById('hideHousing'),
   compactImport: document.getElementById('compactImport'),
   clearFlagsBtn: document.getElementById('clearFlagsBtn'),
   summary: document.getElementById('summary'),
@@ -120,7 +122,9 @@ function bindEvents() {
     els.hidePassed,
     els.urlOnly,
     els.titledOnly,
-    els.hideUnknown
+    els.hideUnknown,
+    els.hideAutos,
+    els.hideHousing
   ].forEach(el => {
     el.addEventListener('input', onFilterChanged);
     el.addEventListener('change', onFilterChanged);
@@ -154,6 +158,8 @@ function restoreState() {
     els.urlOnly.checked = Boolean(prefs.urlOnly);
     els.titledOnly.checked = prefs.titledOnly !== false;
     els.hideUnknown.checked = Boolean(prefs.hideUnknown);
+    els.hideAutos.checked = Boolean(prefs.hideAutos);
+    els.hideHousing.checked = Boolean(prefs.hideHousing);
     els.compactImport.checked = prefs.compactImport !== false;
   } catch {
     els.statusFilter.value = 'all';
@@ -188,6 +194,8 @@ function savePrefs() {
     urlOnly: els.urlOnly.checked,
     titledOnly: els.titledOnly.checked,
     hideUnknown: els.hideUnknown.checked,
+    hideAutos: els.hideAutos.checked,
+    hideHousing: els.hideHousing.checked,
     compactImport: els.compactImport.checked
   };
   localStorage.setItem(STORAGE_KEYS.prefs, JSON.stringify(prefs));
@@ -821,6 +829,8 @@ function applyFiltersAndRender() {
     if (els.urlOnly.checked && !item.url) return false;
     if (els.titledOnly.checked && !hasMeaningfulTitle(item)) return false;
     if (els.hideUnknown.checked && item.status === 'unknown') return false;
+    if (els.hideAutos.checked && looksLikeAutomotive(item)) return false;
+    if (els.hideHousing.checked && looksLikeHousing(item)) return false;
     if (minPrice != null && (item.price == null || item.price < minPrice)) return false;
     if (maxPrice != null && (item.price == null || item.price > maxPrice)) return false;
     if (savedAfter != null && (!item.savedAt || new Date(item.savedAt).getTime() < savedAfter)) return false;
@@ -842,6 +852,31 @@ function applyFiltersAndRender() {
 function hasMeaningfulTitle(item) {
   const title = String(item.title || '').trim().toLowerCase();
   return Boolean(title) && title !== '(untitled saved item)' && title !== '(untitled listing)';
+}
+
+function looksLikeAutomotive(item) {
+  const text = `${item.title || ''} ${item.cleanedTitle || ''} ${item.statusReason || ''}`.toLowerCase();
+  if (!text.trim()) return false;
+  const strong = [
+    /\b(?:sedan|coupe|hatchback|convertible|suv|truck|pickup|van|minivan|wagon|motorcycle|atv|rv|camper)\b/,
+    /\b(?:clean title|salvage title|rebuilt title|automatic transmission|manual transmission)\b/,
+    /\b\d{4}\s+(?:ford|chevy|chevrolet|gmc|toyota|honda|nissan|mazda|lexus|bmw|mercedes|audi|jeep|dodge|ram|subaru|kia|hyundai|cadillac|lincoln|volkswagen|vw|porsche|tesla)\b/,
+    /\b(?:f150|f-150|silverado|camry|civic|accord|corvette|mustang|wrangler|tacoma|tundra|town car|altima|corolla|rav4|crv|cr-v|pilot|escape)\b/,
+    /\b(?:mileage|miles)\b/
+  ];
+  return strong.some(re => re.test(text));
+}
+
+function looksLikeHousing(item) {
+  const text = `${item.title || ''} ${item.cleanedTitle || ''} ${item.statusReason || ''}`.toLowerCase();
+  if (!text.trim()) return false;
+  const strong = [
+    /\b\d+\s*bed(?:room)?s?\b/,
+    /\b\d+\s*bath(?:room)?s?\b/,
+    /\b(?:house|home|condo|townhouse|apartment|studio|duplex|triplex|real estate|realtor|lease|for rent|rentals?)\b/,
+    /\b(?:mobile home|manufactured home|land for sale|parcel|lot for sale|sq ?ft|square feet|acres?)\b/
+  ];
+  return strong.some(re => re.test(text));
 }
 
 function sortItems(items, mode) {
@@ -897,6 +932,8 @@ function renderSummary(items) {
   const withUrl = items.filter(i => i.url).length;
   const unknownNoUrl = items.filter(i => i.status === 'unknown' && !i.url).length;
   const passedHidden = els.hidePassed.checked ? state.items.filter(i => i.passed).length : 0;
+  const autoHidden = els.hideAutos.checked ? state.items.filter(i => looksLikeAutomotive(i)).length : 0;
+  const housingHidden = els.hideHousing.checked ? state.items.filter(i => looksLikeHousing(i)).length : 0;
   const text = [
     `${items.length} shown of ${state.items.length} total`,
     `Active ${counts.active || 0}`,
@@ -910,6 +947,8 @@ function renderSummary(items) {
     `With URL ${withUrl}`,
     `Unknown without URL ${unknownNoUrl}`,
     els.hidePassed.checked ? `Passed hidden ${passedHidden}` : null,
+    els.hideAutos.checked ? `Autos hidden ${autoHidden}` : null,
+    els.hideHousing.checked ? `Housing hidden ${housingHidden}` : null,
     els.compactImport.checked ? 'Compact import on' : 'Compact import off'
   ].filter(Boolean).join(' • ');
   els.summary.textContent = text;
