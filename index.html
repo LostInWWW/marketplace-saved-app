@@ -11,7 +11,7 @@
   <header class="app-header">
     <div>
       <h1>Marketplace Saved Organizer</h1>
-      <p class="subtle">Import your Facebook export zip or JSON files, filter the weakest records, browse by list or map, copy titles, and jump to Marketplace or eBay sold search.</p>
+      <p class="subtle">Import your Facebook export zip or JSON files, keep the stronger records on iPhone, browse by list or map, copy titles, and jump to Marketplace or eBay sold search.</p>
     </div>
   </header>
 
@@ -21,7 +21,11 @@
         <label for="fileInput">Import Facebook zip or JSON files</label>
         <input id="fileInput" type="file" accept=".zip,.json,application/json,application/zip" multiple />
         <p id="importStatus" class="subtle small">No items loaded yet.</p>
-        <div class="button-row">
+        <div class="toggles compact-toggle-block">
+          <label><input id="compactImport" type="checkbox" checked /> Compact iPhone import</label>
+        </div>
+        <div id="compactHelp" class="subtle small compact-help">Keeps titled Marketplace-linked records and trims weak history rows so Safari storage is less likely to fail.</div>
+        <div class="button-row multi-row">
           <button id="importBtn" type="button">Import selected file</button>
           <button id="loadSampleBtn" type="button">Load demo data</button>
           <button id="clearDataBtn" type="button" class="secondary">Clear imported data</button>
@@ -161,6 +165,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 const STORAGE_KEYS = {
-  items: 'mpso_items_v3',
+  items: 'mpso_items_v4',
   location: 'mpso_location_v1',
-  prefs: 'mpso_prefs_v2'
+  prefs: 'mpso_prefs_v3'
 };
 
 const state = {
@@ -60,7 +60,6 @@ const els = {
   importStatus: document.getElementById('importStatus'),
   loadSampleBtn: document.getElementById('loadSampleBtn'),
   clearDataBtn: document.getElementById('clearDataBtn'),
-  clearFlagsBtn: document.getElementById('clearFlagsBtn'),
   useLocationBtn: document.getElementById('useLocationBtn'),
   clearLocationBtn: document.getElementById('clearLocationBtn'),
   locationStatus: document.getElementById('locationStatus'),
@@ -73,12 +72,11 @@ const els = {
   savedBefore: document.getElementById('savedBefore'),
   shortlistOnly: document.getElementById('shortlistOnly'),
   hidePassed: document.getElementById('hidePassed'),
-  titledOnly: document.getElementById('titledOnly'),
-  urlOnly: document.getElementById('urlOnly'),
-  hideUnknown: document.getElementById('hideUnknown'),
   urlOnly: document.getElementById('urlOnly'),
   titledOnly: document.getElementById('titledOnly'),
   hideUnknown: document.getElementById('hideUnknown'),
+  compactImport: document.getElementById('compactImport'),
+  clearFlagsBtn: document.getElementById('clearFlagsBtn'),
   summary: document.getElementById('summary'),
   listTabBtn: document.getElementById('listTabBtn'),
   mapTabBtn: document.getElementById('mapTabBtn'),
@@ -156,9 +154,11 @@ function restoreState() {
     els.urlOnly.checked = Boolean(prefs.urlOnly);
     els.titledOnly.checked = prefs.titledOnly !== false;
     els.hideUnknown.checked = Boolean(prefs.hideUnknown);
+    els.compactImport.checked = prefs.compactImport !== false;
   } catch {
     els.statusFilter.value = 'all';
     els.titledOnly.checked = true;
+    els.compactImport.checked = true;
   }
 
   updateLocationStatus();
@@ -187,7 +187,8 @@ function savePrefs() {
     hidePassed: els.hidePassed.checked,
     urlOnly: els.urlOnly.checked,
     titledOnly: els.titledOnly.checked,
-    hideUnknown: els.hideUnknown.checked
+    hideUnknown: els.hideUnknown.checked,
+    compactImport: els.compactImport.checked
   };
   localStorage.setItem(STORAGE_KEYS.prefs, JSON.stringify(prefs));
 }
@@ -226,7 +227,10 @@ async function importSelectedFiles() {
     zipEntriesRead: 0,
     zipJsonFiles: 0,
     zipFiles: 0,
-    failedFiles: 0
+    failedFiles: 0,
+    beforeCompact: 0,
+    keptCompact: 0,
+    compactDropped: 0
   };
 
   for (const file of files) {
@@ -252,28 +256,33 @@ async function importSelectedFiles() {
     return;
   }
 
-  state.items = dedupeAndMerge(rawItems, state.items);
+  stats.beforeCompact = rawItems.length;
+  const processedItems = els.compactImport.checked ? compactItemsForIphone(rawItems) : rawItems;
+  stats.keptCompact = processedItems.length;
+  stats.compactDropped = stats.beforeCompact - stats.keptCompact;
+
+  state.items = dedupeAndMerge(processedItems, state.items);
   recomputeDistances();
 
   try {
     saveItems();
+    applyFiltersAndRender();
+    els.fileInput.value = '';
+    setImportStatus([
+      `Imported ${state.items.length} saved records.`,
+      els.compactImport.checked ? `Compact mode kept ${stats.keptCompact} of ${stats.beforeCompact}.` : null,
+      stats.zipFiles ? `Zip files: ${stats.zipFiles}` : null,
+      stats.zipJsonFiles ? `Zip JSON files read: ${stats.zipJsonFiles}` : null,
+      stats.collections ? `Collections: ${stats.collections}` : null,
+      stats.listingHistory ? `Listing history: ${stats.listingHistory}` : null,
+      stats.genericSavedLogs ? `generic saved logs skipped: ${stats.genericSavedLogs}` : null,
+      stats.failedFiles ? `Files skipped: ${stats.failedFiles}` : null
+    ].filter(Boolean).join(' '));
   } catch (error) {
     console.error(error);
-    setImportStatus('Import worked, but Safari could not save all records locally. Try clearing imported data first or use fewer files.', true);
+    applyFiltersAndRender();
+    setImportStatus('Import worked, but Safari could not save all records locally. Compact iPhone import is on, but the remaining records are still too large for Safari storage. Clear imported data and try again.', true);
   }
-
-  applyFiltersAndRender();
-  els.fileInput.value = '';
-
-  setImportStatus([
-    `Imported ${rawItems.length} records.`,
-    stats.zipFiles ? `Zip files: ${stats.zipFiles}` : null,
-    stats.zipJsonFiles ? `Zip JSON files read: ${stats.zipJsonFiles}` : null,
-    stats.collections ? `Collections: ${stats.collections}` : null,
-    stats.listingHistory ? `Listing history: ${stats.listingHistory}` : null,
-    stats.genericSavedLogs ? `generic saved logs skipped: ${stats.genericSavedLogs}` : null,
-    stats.failedFiles ? `Files skipped: ${stats.failedFiles}` : null
-  ].filter(Boolean).join(' '));
 }
 
 async function parseZipFile(file, stats) {
@@ -383,7 +392,6 @@ function normalizeSavedLogRow(row) {
     savedAt: normalizeDate(row.timestamp),
     status: statusBundle.status,
     statusConfidence: statusBundle.confidence,
-    statusReason: statusBundle.reason || '',
     statusReason: statusBundle.reason,
     sourceType: 'saved_log',
     notes: '',
@@ -439,7 +447,6 @@ function normalizeCollectionEntry(entry, collectionTitle, collectionUpdated) {
     savedAt: normalizeDate(collectionUpdated),
     status: statusBundle.status,
     statusConfidence: statusBundle.confidence,
-    statusReason: statusBundle.reason || '',
     statusReason: statusBundle.reason,
     sourceType: 'collection',
     notes: '',
@@ -478,7 +485,6 @@ function parseListingHistoryJson(json) {
       savedAt: normalizeDate(viewedAt),
       status: statusBundle.status,
       statusConfidence: statusBundle.confidence,
-    statusReason: statusBundle.reason || '',
       statusReason: statusBundle.reason,
       sourceType: 'listing_history',
       notes: '',
@@ -529,7 +535,6 @@ function normalizeGenericRecord(rec) {
     savedAt: normalizeDate(savedRaw),
     status: statusBundle.status,
     statusConfidence: statusBundle.confidence,
-    statusReason: statusBundle.reason || '',
     statusReason: statusBundle.reason,
     sourceType: 'generic',
     notes: '',
@@ -688,6 +693,29 @@ function dedupeAndMerge(newItems, existingItems) {
   return Array.from(map.values());
 }
 
+function scoreCompactStrength(item) {
+  let score = 0;
+  if (hasMeaningfulTitle(item)) score += 50;
+  if (item.url) score += 45;
+  if (item.sourceType === 'collection') score += 25;
+  if (item.sourceType === 'listing_history') score += 10;
+  if (item.price != null) score += 15;
+  if (item.areaText) score += 10;
+  if (item.status === 'active') score += 8;
+  if (item.status === 'unavailable' || item.status === 'sold') score += 4;
+  if (item.status === 'unknown' && !item.url) score -= 30;
+  return score;
+}
+
+function compactItemsForIphone(items) {
+  const deduped = dedupeAndMerge(items, []);
+  const strong = deduped.filter(item => hasMeaningfulTitle(item) && (item.url || item.sourceType === 'collection'));
+  const fallback = deduped.filter(item => !strong.some(s => s.id === item.id) && hasMeaningfulTitle(item) && item.sourceType === 'listing_history');
+  fallback.sort((a, b) => scoreCompactStrength(b) - scoreCompactStrength(a) || compareDate(b.savedAt, a.savedAt));
+  const kept = [...strong, ...fallback.slice(0, 250)];
+  return dedupeAndMerge(kept, []);
+}
+
 function loadDemoData() {
   state.items = dedupeAndMerge(DEMO_ITEMS, state.items);
   recomputeDistances();
@@ -697,10 +725,22 @@ function loadDemoData() {
 }
 
 function clearImportedData() {
-  if (!confirm('Clear all locally stored items and notes on this device?')) return;
+  if (!confirm('Clear all locally stored imported items on this device?')) return;
   state.items = [];
   saveItems();
   setImportStatus('Cleared imported data on this device.');
+  applyFiltersAndRender();
+}
+
+function clearNotesAndFlags() {
+  if (!state.items.length) {
+    setImportStatus('No saved notes or flags to clear.');
+    return;
+  }
+  if (!confirm('Clear all notes, shortlist flags, and pass flags for the currently stored items?')) return;
+  state.items = state.items.map(item => ({ ...item, notes: '', shortlist: false, passed: false }));
+  saveItems();
+  setImportStatus('Cleared notes and flags for locally stored items.');
   applyFiltersAndRender();
 }
 
@@ -856,6 +896,7 @@ function renderSummary(items) {
   const titled = items.filter(hasMeaningfulTitle).length;
   const withUrl = items.filter(i => i.url).length;
   const unknownNoUrl = items.filter(i => i.status === 'unknown' && !i.url).length;
+  const passedHidden = els.hidePassed.checked ? state.items.filter(i => i.passed).length : 0;
   const text = [
     `${items.length} shown of ${state.items.length} total`,
     `Active ${counts.active || 0}`,
@@ -867,8 +908,10 @@ function renderSummary(items) {
     `History ${fromHistory}`,
     `Titled ${titled}`,
     `With URL ${withUrl}`,
-    `Unknown without URL ${unknownNoUrl}`
-  ].join(' • ');
+    `Unknown without URL ${unknownNoUrl}`,
+    els.hidePassed.checked ? `Passed hidden ${passedHidden}` : null,
+    els.compactImport.checked ? 'Compact import on' : 'Compact import off'
+  ].filter(Boolean).join(' • ');
   els.summary.textContent = text;
 }
 
@@ -888,7 +931,6 @@ function renderList(items) {
     const savedDateEl = node.querySelector('.saved-date');
     const statusEl = node.querySelector('.status-badge');
     const confidenceEl = node.querySelector('.confidence');
-    const sourceTypeEl = node.querySelector('.source-type');
     const reasonEl = node.querySelector('.reason');
     const notesInput = node.querySelector('.notes-input');
     const copyTitleBtn = node.querySelector('.copy-title-btn');
@@ -906,8 +948,7 @@ function renderList(items) {
     statusEl.textContent = item.status;
     statusEl.classList.add(item.status);
     confidenceEl.textContent = `Status source: ${item.statusConfidence}`;
-    sourceTypeEl.textContent = `Record source: ${item.sourceType}`;
-    reasonEl.textContent = item.statusReason ? `Why: ${item.statusReason}` : 'Why: no additional reason recorded';
+    reasonEl.textContent = item.statusReason || 'No additional reason recorded.';
     notesInput.value = item.notes || '';
     shortlistToggle.checked = Boolean(item.shortlist);
     passedToggle.checked = Boolean(item.passed);
@@ -999,8 +1040,7 @@ function exportFilteredCsv() {
       item.url || ''
     ]);
   });
-
-  TEMP
+  const csv = rows.map(row => row.map(csvCell).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
