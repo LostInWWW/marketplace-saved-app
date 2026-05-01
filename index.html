@@ -19,7 +19,7 @@
     <section class="panel controls-panel">
       <div class="control-group">
         <label for="fileInput">Import Facebook zip or JSON files</label>
-        <input id="fileInput" type="file" accept=".zip,.json,application/json,application/zip" multiple />
+        <input id="fileInput" type="file" accept=".zip,.json,.html,.htm,application/json,application/zip,text/html" multiple />
         <p id="importStatus" class="subtle small">No items loaded yet.</p>
         <div class="toggles compact-toggle-block">
           <label><input id="compactImport" type="checkbox" checked /> Compact iPhone import</label>
@@ -35,12 +35,27 @@
       </div>
 
       <div class="control-group">
-        <div class="section-title">Location</div>
+        <div class="section-title">Planning point</div>
         <div class="button-row">
-          <button id="useLocationBtn" type="button">Use current location</button>
-          <button id="clearLocationBtn" type="button" class="secondary">Clear location</button>
+          <button id="dropPinBtn" type="button">Drop map pin</button>
+          <button id="useLocationBtn" type="button" class="secondary">Use here now</button>
+          <button id="clearLocationBtn" type="button" class="secondary">Clear point</button>
         </div>
-        <p id="locationStatus" class="subtle small">Location not set.</p>
+        <label for="planningAreaSelect">Or choose an area</label>
+        <select id="planningAreaSelect">
+          <option value="">Choose area...</option>
+          <option value="se_portland">SE Portland</option>
+          <option value="east_vancouver">East Vancouver</option>
+          <option value="beaverton">Beaverton</option>
+          <option value="tigard">Tigard</option>
+          <option value="hillsboro">Hillsboro</option>
+          <option value="gresham">Gresham</option>
+          <option value="milwaukie">Milwaukie</option>
+          <option value="lake_oswego">Lake Oswego</option>
+          <option value="oregon_city">Oregon City</option>
+          <option value="salem">Salem</option>
+        </select>
+        <p id="locationStatus" class="subtle small">Planning point not set.</p>
       </div>
 
       <div class="control-group">
@@ -93,12 +108,25 @@
             <input id="savedBefore" type="date" />
           </div>
         </div>
+        <div>
+          <label for="maxDistance">Max distance miles</label>
+          <input id="maxDistance" type="number" min="0" step="1" placeholder="Any distance" />
+        </div>
+
+        <div class="button-row multi-row">
+          <button id="buyerModeBtn" type="button">Buying nearby mode</button>
+          <button id="clearFiltersBtn" type="button" class="secondary">Clear filters</button>
+        </div>
 
         <div class="toggles">
           <label><input id="shortlistOnly" type="checkbox" /> Shortlist only</label>
           <label><input id="hidePassed" type="checkbox" /> Hide passed</label>
-          <label><input id="urlOnly" type="checkbox" /> Marketplace URL only</label>
+          <label><input id="hideSoldUnavailable" type="checkbox" /> Hide sold/unavailable</label>
+          <label><input id="facebookLinkOnly" type="checkbox" /> Openable Facebook link only</label>
+          <label><input id="urlOnly" type="checkbox" /> Direct Marketplace URL only</label>
+          <label><input id="pricedOnly" type="checkbox" /> Priced items only</label>
           <label><input id="titledOnly" type="checkbox" checked /> Titled items only</label>
+          <label><input id="hideJunkTitles" type="checkbox" checked /> Hide junk titles</label>
           <label><input id="hideUnknown" type="checkbox" /> Hide unknown</label>
           <label><input id="hideAutos" type="checkbox" /> Hide automobiles</label>
           <label><input id="hideHousing" type="checkbox" /> Hide housing</label>
@@ -148,6 +176,7 @@
         <span class="status-badge"></span>
         <span class="meta confidence"></span>
       </div>
+      <div class="meta-row source-badges"></div>
       <div class="meta-row">
         <span class="meta reason"></span>
       </div>
@@ -156,6 +185,7 @@
         <button class="copy-title-btn" type="button">Copy title</button>
         <button class="copy-ebay-title-btn secondary" type="button">Copy cleaned title</button>
         <button class="marketplace-link-btn" type="button">Open Marketplace</button>
+        <button class="facebook-link-btn secondary" type="button">Open Facebook post</button>
         <button class="ebay-link-btn secondary" type="button">eBay sold search</button>
       </div>
       <div class="button-row wrap">
@@ -167,6 +197,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>

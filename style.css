@@ -25,6 +25,16 @@ button, input, select, textarea {
 }
 button { background: var(--accent); color: #fff; border-color: var(--accent); }
 button.secondary { background: #fff; color: var(--text); }
+button.active-action {
+  background: #fbbf24;
+  border-color: #92400e;
+  color: #111827;
+}
+button:disabled {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+  color: #6b7280;
+}
 button:active { transform: translateY(1px); }
 label { display: block; font-size: 14px; margin-bottom: 6px; }
 
@@ -60,9 +70,26 @@ label { display: block; font-size: 14px; margin-bottom: 6px; }
 .control-group + .control-group { margin-top: 16px; }
 .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .button-row { display: flex; gap: 8px; margin-top: 8px; }
+.button-row button, .button-row .pill-toggle { min-height: 44px; }
 .button-row.wrap { flex-wrap: wrap; }
 .button-row > * { flex: 1; }
 .toggles { display: grid; gap: 8px; margin-top: 10px; }
+.toggles label {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+.toggles label.filter-active {
+  border-color: #111827;
+  background: #f9fafb;
+  box-shadow: inset 4px 0 0 #111827;
+}
+.toggles input { margin: 0; }
 .summary-box { background: var(--accent-2); padding: 12px; border-radius: 12px; }
 
 .toolbar {
@@ -97,11 +124,18 @@ label { display: block; font-size: 14px; margin-bottom: 6px; }
   user-select: text;
   -webkit-user-select: text;
 }
+.clickable-title {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
 .price-badge, .status-badge, .meta, .pill-toggle {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 6px 10px; border-radius: 999px; background: var(--accent-2);
   font-size: 13px;
 }
+.data-badge { background: #eef2ff; color: #3730a3; }
 .meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .status-badge.active { background: #d1fae5; color: var(--success); }
 .status-badge.unavailable, .status-badge.sold { background: #fee2e2; color: var(--danger); }
